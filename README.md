@@ -4,8 +4,8 @@
 ## Anggota Kelompok
 | Nama           | NRP        | Kelas     |
 | ---            | ---        | ----------|
-|                |            |           |
-|                |            |           |
+|Uwais Achmad|5025241103|D|
+|Farrel Aqilla Novianto|5025241015|D|
 
 ## Link Youtube (Unlisted)
 Link ditaruh di bawah ini
