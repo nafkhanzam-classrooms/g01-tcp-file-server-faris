@@ -117,6 +117,8 @@ Karena TCP berbentuk stream byte, penerima perlu tahu batas akhir data file. Itu
 - Thread receiver dan thread input user dipisah supaya klien tetap responsif.
 - Pemakaian `os.path.basename` pada nama file mencegah path tidak diinginkan saat simpan.
 
+---
+
 ### 4. Penjelasan Detail `server-sync.py`
 
 #### 4.1 Alur dari `main()`
@@ -155,6 +157,8 @@ Karena TCP berbentuk stream byte, penerima perlu tahu batas akhir data file. Itu
 - Jika satu klien lambat upload/download, klien lain harus menunggu.
 - Cocok sebagai baseline paling mudah untuk memahami protokol.
 
+---
+
 ### 5. Penjelasan Detail `server-thread.py`
 
 #### 5.1 Alur dari `main()`
@@ -181,6 +185,8 @@ Karena TCP berbentuk stream byte, penerima perlu tahu batas akhir data file. Itu
 #### 5.3 Nilai pembelajaran
 - Menunjukkan pola shared-state + lock saat banyak thread akses resource bersama.
 - Menunjukkan trade-off: lebih paralel tetapi ada overhead thread.
+
+---
 
 ### 6. Penjelasan Detail `server-select.py`
 
@@ -223,6 +229,8 @@ Karena TCP berbentuk stream byte, penerima perlu tahu batas akhir data file. Itu
 - Karena event-driven, server ini bisa melayani banyak klien tanpa membuat thread baru.
 - Kompleksitas berpindah ke manajemen state parser per koneksi.
 
+---
+
 ### 7. Penjelasan Detail `server-poll.py`
 
 #### 7.1 Alur event loop
@@ -245,6 +253,8 @@ Karena TCP berbentuk stream byte, penerima perlu tahu batas akhir data file. Itu
 - Cocok untuk skenario banyak descriptor aktif.
 - Tetap membutuhkan parser stateful agar stream TCP bisa diterjemahkan menjadi command dan payload file.
 
+---
+
 ### 8. Operasi Program
 
 #### 8.1 Operasi `/list`
@@ -264,6 +274,8 @@ Karena TCP berbentuk stream byte, penerima perlu tahu batas akhir data file. Itu
 - Client: kirim `/download <nama>`.
 - Server: jika file ada, kirim `FILE <nama> <size>` + payload.
 - Client: `receiver_loop()` memanggil `recv_exact`, lalu simpan ke `downloads/`.
+
+---
 
 ### 9. Tabel Perbedaan Implementasi
 
