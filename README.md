@@ -10,7 +10,7 @@
 ## Link Youtube (Unlisted)
 Link ditaruh di bawah ini
 ```
-https://drive.google.com/drive/folders/1KkFo7a9jkE7A7JC7kQ6Q4sLp-9XNjIXO?usp=sharing
+https://youtu.be/mUpDliUc5OU
 ```
 
 ## Penjelasan Program
