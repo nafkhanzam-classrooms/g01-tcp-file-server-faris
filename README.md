@@ -275,6 +275,20 @@ Karena TCP berbentuk stream byte, penerima perlu tahu batas akhir data file. Itu
 - Server: jika file ada, kirim `FILE <nama> <size>` + payload.
 - Client: `receiver_loop()` memanggil `recv_exact`, lalu simpan ke `downloads/`.
 
+### 8.4 Operasi `broadcast`
+- Beberapa varian server (`server-thread.py`, `server-select.py`, `server-poll.py`) mengirim notifikasi broadcast ke semua klien aktif.
+- Tujuan: memberi pemberitahuan real-time (mis. "client X mengupload file Y" atau status koneksi).
+- Format pesan:
+  - Server -> semua client: `INFO <pesan>\n` (mis. `INFO Uploaded: payload1.txt`) 
+- Contoh skenario:
+  - Setelah berhasil menerima upload dari klien A, server memanggil broadcast sehingga semua klien mendapatkan `INFO Uploaded: <nama_file>`.
+- Perilaku client:
+  - `receiver_loop()` menampilkan line `INFO ...` ke terminal tanpa mengganggu operasi download/upload yang sedang berjalan.
+- Catatan implementasi:
+  - `server-sync.py` tidak menyokong broadcast karena hanya melayani satu klien pada satu waktu.
+  - Pada model thread, broadcast dilakukan melalui registry yang mengirim pesan ke setiap socket; pada model event-driven, loop iterasi mengirim ke setiap koneksi yang terdaftar.
+  - Pesan broadcast adalah baris teks; server harus memastikan framing (newline) agar client dapat mem-parse header dengan benar.
+
 ---
 
 ### 9. Tabel Perbedaan Implementasi
@@ -289,3 +303,57 @@ Karena TCP berbentuk stream byte, penerima perlu tahu batas akhir data file. Itu
 | Kompleksitas parser | Rendah | Rendah-Sedang | Sedang-Tinggi (state machine) | Sedang-Tinggi (state machine) |
 
 ## Screenshot Hasil
+
+### 1. server-sync.py
+
+![Alt Text](img/server-sync.png)
+
+**Urutan Eksekusi:**
+1. Client mengirim pesan "hai" dan "ini uwais dan farrel" yang diterima oleh server, lalu server mengembalikan pesan yang sama ke client
+2. Client meminta `/list` file di server, namun mengembalikan `No files on server` karena belum ada file yang diupload
+3. Client upload `payload1.txt` yang kemudian diterima server 
+4. Client meminta `/list` fiel di server, mengembalikan `upload1.txt` yang sebelumnya sudah diupload
+5. Client `/download` file `payload1.txt` yang tadi sudah diupload, dan berhasil diunduh dengan size sebesar **28 bytes**
+
+### 2. server-select.py
+
+![Alt Text](img/server-select.png)
+
+Client A adalah terminal kanan atas, Client B adalah terminal kanan bawah
+
+**Urutan Eksekusi:**
+1. Client A mengirim pesan "hai ini farrel" ke server lalu dikirim ke Client B
+2. Client B membalas dengan pesan "halo farrel, ini uwais" ke server lalu dikirim ke Client A
+3. Client A dan B melihat `/list` file dan ada file `payload1.txt` yang sudah kita upload sebelumnya
+4. Client A `/upload` file `payload2.txt` ke server
+5. Client B `/upload` file `terserah.txt` ke server
+6. Client A dan B kembali melihat `/list` file dan ada file `payload1.txt`, `payload2.txt`, dan `terserah.txt` yang sudah di upload sebelumnya oleh masing-masing client
+7. Client A dan B saling mendownload file yang sudah diupload sebelumnya, dan berhasil diunduh dengan size `terserah.txt` sebesar **10 bytes** dan `payload2.txt` sebesar **23 bytes**
+
+### 3. server-thread.py
+
+![Alt Text](img/server-thread.png)
+
+Client A adalah terminal kanan atas, Client B adalah terminal kanan bawah
+
+**Urutan Eksekusi:**
+1. Client A mengirim pesan "hai ini farrel sebagai thread" ke server lalu dikirim ke Client B
+2. Client B membalas dengan pesan "halo farrel, ini uwais" ke server lalu dikirim ke Client A
+3. Client A dan B melihat `/list` file dan ada file `payload1.txt`, `payload2.txt`, dan `terserah.txt` yang sudah kita upload sebelumnya
+4. Client A `/upload` file `thread.txt` ke server
+5. Client B mendownload file yang sudah diupload Client A yaitu `thread.txt`, dan berhasil diunduh dengan size sebesar **16 bytes**
+6. Client A dan B kembali melihat `/list` file dan melihat ada `payload1.txt`, `payload2.txt`, `terserah.txt`, dan `thread.txt`
+
+### 4. server-poll.py
+
+![Alt Text](img/server-poll.png)
+
+Client A adalah terminal kanan atas, Client B adalah terminal kanan bawah
+
+**Urutan Eksekusi:**
+1. Client A mengirim pesan "hai ini farrel sebagai poll" ke server lalu dikirim ke Client B
+2. Client B membalas dengan pesan "halo farrel, ini uwais" ke server lalu dikirim ke Client A
+3. Client A dan B melihat `/list` file dan ada file `payload1.txt`, `payload2.txt`, `terserah.txt`, dan `thread.txt` yang sudah kita upload sebelumnya
+4. Client A `/upload` file `poll.txt` ke server
+5. Client B mendownload file yang sudah diupload Client A yaitu `poll.txt`, dan berhasil diunduh dengan size sebesar **9 bytes**
+6. Client A dan B kembali melihat `/list` file dan melihat ada `payload1.txt`, `payload2.txt`, `terserah.txt`, `thread.txt`, dan `poll.txt`
