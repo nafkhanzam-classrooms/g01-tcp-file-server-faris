@@ -49,10 +49,13 @@ class ClientRegistry:
             if conn in self._clients:
                 self._clients.remove(conn)
 
-    def broadcast(self, message: str) -> None:
+    def broadcast(self, message: str, exclude=None) -> None:
+        """Send INFO <message> to all clients except the optional exclude socket."""
         data = f"INFO {message}\n".encode("utf-8")
         with self._lock:
             for client in list(self._clients):
+                if exclude is not None and client is exclude:
+                    continue
                 try:
                     client.sendall(data)
                 except OSError:
@@ -62,7 +65,7 @@ class ClientRegistry:
 def handle_client(conn: socket.socket, addr, storage_dir: str, registry: ClientRegistry) -> None:
     with conn:
         registry.add(conn)
-        registry.broadcast(f"client connected: {addr}")
+        print(f"client connected: {addr}")
         conn_file = conn.makefile("rb")
         conn.sendall(b"INFO Connected. Commands: /list, /upload <file>, /download <file>\n")
         try:
@@ -72,6 +75,11 @@ def handle_client(conn: socket.socket, addr, storage_dir: str, registry: ClientR
                     break
                 text = line.decode("utf-8", errors="replace").strip()
                 if not text:
+                    continue
+                # jika pesan tidak diawali '/' maka langsung broadcast ke semua client
+                if not text.startswith('/'):
+                    # jangan kirim balik ke pengirim
+                    registry.broadcast(f"{addr}: {text}", exclude=conn)
                     continue
                 parts = text.split()
                 cmd = parts[0]

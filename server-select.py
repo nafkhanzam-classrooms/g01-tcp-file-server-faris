@@ -24,9 +24,11 @@ def send_list(conn: socket.socket, storage_dir: str) -> None:
     conn.sendall(b"END\n")
 
 
-def broadcast(clients: Dict[socket.socket, "ClientState"], message: str) -> None:
+def broadcast(clients: Dict[socket.socket, "ClientState"], message: str, exclude: socket.socket = None) -> None:
     data = f"INFO {message}\n".encode("utf-8")
     for client in list(clients.keys()):
+        if exclude is not None and client is exclude:
+            continue
         try:
             client.sendall(data)
         except OSError:
@@ -96,7 +98,11 @@ def process_buffer(conn: socket.socket, state: ClientState, clients: Dict[socket
             del state.buffer[: newline_index + 1]
             line = raw_line.decode("utf-8", errors="replace").strip()
             if line:
-                handle_command(conn, state, clients, storage_dir, line)
+                # if line is not a command, broadcast it as a plain message
+                if not line.startswith('/'):
+                    broadcast(clients, f"{state.addr}: {line}", exclude=conn)
+                else:
+                    handle_command(conn, state, clients, storage_dir, line)
         elif state.mode == "upload":
             if len(state.buffer) < state.expected:
                 return
@@ -133,7 +139,7 @@ def main() -> None:
                     inputs.append(conn)
                     clients[conn] = ClientState(addr=addr)
                     conn.sendall(b"INFO Connected. Commands: /list, /upload <file>, /download <file>\n")
-                    broadcast(clients, f"client connected: {addr}")
+                    print(f"client connected: {addr}")
                 else:
                     try:
                         data = sock.recv(4096)

@@ -24,9 +24,11 @@ def send_list(conn: socket.socket, storage_dir: str) -> None:
     conn.sendall(b"END\n")
 
 
-def broadcast(clients: Dict[int, "ClientState"], message: str) -> None:
+def broadcast(clients: Dict[int, "ClientState"], message: str, exclude: socket.socket = None) -> None:
     data = f"INFO {message}\n".encode("utf-8")
     for state in list(clients.values()):
+        if exclude is not None and state.conn is exclude:
+            continue
         try:
             state.conn.sendall(data)
         except OSError:
@@ -44,6 +46,10 @@ class ClientState:
 
 
 def handle_command(state: ClientState, clients: Dict[int, ClientState], storage_dir: str, line: str) -> None:
+    # if the line is not a command, broadcast it as a plain message
+    if not line.startswith('/'):
+        broadcast(clients, f"{state.addr}: {line}", exclude=state.conn)
+        return
     parts = line.split()
     if not parts:
         return
@@ -137,7 +143,7 @@ def main() -> None:
                     poller.register(conn, select.POLLIN)
                     clients[conn_fd] = ClientState(conn=conn, addr=addr)
                     conn.sendall(b"INFO Connected. Commands: /list, /upload <file>, /download <file>\n")
-                    broadcast(clients, f"client connected: {addr}")
+                    print(f"client connected: {addr}")
                 else:
                     state = clients.get(fd)
                     if not state:

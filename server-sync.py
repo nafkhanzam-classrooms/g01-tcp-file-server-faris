@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 import os
 import socket
+import threading
+from typing import List
+
 
 def safe_filename(name: str) -> str:
     return os.path.basename(name.strip())
+
 
 def ensure_storage_dir() -> str:
     storage_dir = os.path.join(os.getcwd(), "server_files")
     os.makedirs(storage_dir, exist_ok=True)
     return storage_dir
+
 
 def send_list(conn: socket.socket, storage_dir: str) -> None:
     files = sorted([f for f in os.listdir(storage_dir) if os.path.isfile(os.path.join(storage_dir, f))])
@@ -16,6 +21,7 @@ def send_list(conn: socket.socket, storage_dir: str) -> None:
     for name in files:
         conn.sendall(f"ITEM {name}\n".encode("utf-8"))
     conn.sendall(b"END\n")
+
 
 def recv_exact(conn_file, size: int) -> bytes:
     chunks = []
@@ -28,8 +34,35 @@ def recv_exact(conn_file, size: int) -> bytes:
         remaining -= len(data)
     return b"".join(chunks)
 
-def handle_client(conn: socket.socket, addr, storage_dir: str) -> None:
+
+class ClientRegistry:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._clients: List[socket.socket] = []
+
+    def add(self, conn: socket.socket) -> None:
+        with self._lock:
+            self._clients.append(conn)
+
+    def remove(self, conn: socket.socket) -> None:
+        with self._lock:
+            if conn in self._clients:
+                self._clients.remove(conn)
+
+    def broadcast(self, message: str) -> None:
+        data = f"{message}\n".encode("utf-8")
+        with self._lock:
+            for client in list(self._clients):
+                try:
+                    client.sendall(data)
+                except OSError:
+                    pass
+
+
+def handle_client(conn: socket.socket, addr, storage_dir: str, registry: ClientRegistry) -> None:
     with conn:
+        registry.add(conn)
+        print(f"client connected: {addr}")
         conn_file = conn.makefile("rb")
         conn.sendall(b"INFO Connected. Commands: /list, /upload <file>, /download <file>\n")
         while True:
@@ -42,6 +75,10 @@ def handle_client(conn: socket.socket, addr, storage_dir: str) -> None:
                 conn.sendall(b"ERR invalid command\n")
                 continue
             if not text:
+                continue
+            # broadcast plain messages
+            if not text.startswith('/'):
+                registry.broadcast(f"{text}")
                 continue
             parts = text.split()
             cmd = parts[0]
@@ -71,6 +108,7 @@ def handle_client(conn: socket.socket, addr, storage_dir: str) -> None:
                 with open(path, "wb") as f:
                     f.write(data)
                 conn.sendall(b"OK upload complete\n")
+                registry.broadcast(f"uploaded {filename} from {addr}")
             elif cmd == "/download":
                 if len(parts) < 2:
                     conn.sendall(b"ERR usage: /download <filename>\n")
@@ -90,12 +128,15 @@ def handle_client(conn: socket.socket, addr, storage_dir: str) -> None:
                         conn.sendall(chunk)
             else:
                 conn.sendall(b"ERR unknown command\n")
+        registry.remove(conn)
+        registry.broadcast(f"client disconnected: {addr}")
 
 
 def main() -> None:
     host = "0.0.0.0"
     port = 9000
     storage_dir = ensure_storage_dir()
+    registry = ClientRegistry()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind((host, port))
@@ -104,8 +145,8 @@ def main() -> None:
         while True:
             conn, addr = server.accept()
             print(f"client connected: {addr}")
-            handle_client(conn, addr, storage_dir)
-            print(f"client disconnected: {addr}")
+            thread = threading.Thread(target=handle_client, args=(conn, addr, storage_dir, registry), daemon=True)
+            thread.start()
 
 
 if __name__ == "__main__":
